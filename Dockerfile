@@ -2,7 +2,7 @@ FROM node:latest
 
 WORKDIR /src
 
-COPY src/Marketplace.Escrow.JS.Unique .
+COPY . .
 
 RUN npm install
 
