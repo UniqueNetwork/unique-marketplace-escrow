@@ -694,10 +694,17 @@ async function migrateDb(){
 }
 
 async function jsonMetadataMigrated() {
-  const conn = await getDbConnection();
-  const migrationSql = `SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20210722091927_JsonMetadata'`;
-  const res = await conn.query(migrationSql);
-  return res.rows.length > 0;
+  let migrated = false;
+  try {
+    const conn = await getDbConnection();
+    const migrationSql = `SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20210722091927_JsonMetadata'`;
+    const res = await conn.query(migrationSql);
+    migrated = res.rows.length > 0;
+  }
+  catch (e) {
+    console.log(e);
+  }
+  return migrated;
 }
 
 async function setMetadataForAllOffers() {
