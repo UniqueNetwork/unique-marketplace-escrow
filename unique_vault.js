@@ -74,7 +74,7 @@ async function getStartingBlock(api) {
   if('current'.localeCompare(config.startFromBlock, undefined, {sensitivity: 'accent'}) === 0) {
     const head = await api.rpc.chain.getHeader();
     const block = head.number.toNumber();
-    return block;
+    return block - 10; // start 10 blocks behind
   }
 
   return parseInt(config.startFromBlock);
