@@ -94,8 +94,8 @@ async function addIncomingNFTTransaction(address, collectionId, tokenId, blockNu
 
   // Clear all previous appearances of this NFT with status 0, update to error
   const errorMessage = "Failed to register (sync err)";
-  const updateIncomingNftSql = `UPDATE public."${incomingTxTable}" 
-    SET  "Status" = 2, "ErrorMessage" = $1 
+  const updateIncomingNftSql = `UPDATE public."${incomingTxTable}"
+    SET  "Status" = 2, "ErrorMessage" = $1
     WHERE "Status" = 0 AND "CollectionId" = $2 AND "TokenId" = $3;`;
   await conn.query(updateIncomingNftSql, [errorMessage, collectionId, tokenId]);
 
@@ -278,6 +278,9 @@ function getTransactionStatus(events, status) {
   if (status.isBroadcast) {
     return "NotReady";
   }
+  if (status.isRetracted) {
+    return "NotReady";
+  }
   if (status.isInBlock || status.isFinalized) {
     if(events.filter(e => e.event.data.method === 'ExtrinsicFailed').length > 0) {
       return "Fail";
@@ -402,9 +405,9 @@ async function scanNftBlock(api, admin, blockNum) {
       const address = ex.signer.toString();
       const collectionId = args[1];
       const tokenId = args[2];
-      
+
       const paraments = {
-        api,            
+        api,
         userAddress: address,
         sender: admin,
         marketContractAddress: config.marketContractAddress,
@@ -580,9 +583,9 @@ async function subscribeToBlocks(api) {
 }
 
 async function addWhiteList({
-  api, 
-  userAddress, 
-  sender, 
+  api,
+  userAddress,
+  sender,
   marketContractAddress
 }) {
   if (!config.whiteList) return;
@@ -660,19 +663,19 @@ async function handleUnique() {
       if (ksmTx.id.length > 0) {
         deposit = true;
 
-        try {          
+        try {
 
           const paraments = {
-            api,            
+            api,
             userAddress: ksmTx.sender,
             sender: admin,
-            marketContractAddress: config.marketContractAddress            
+            marketContractAddress: config.marketContractAddress
           };
           // Add sender to contract white list
           await addWhiteList(paraments);
 
-          await registerQuoteDepositAsync({api, sender: admin, depositorAddress: ksmTx.sender, amount: ksmTx.amount});          
-          await setIncomingKusamaTransactionStatus(ksmTx.id, 1);          
+          await registerQuoteDepositAsync({api, sender: admin, depositorAddress: ksmTx.sender, amount: ksmTx.amount});
+          await setIncomingKusamaTransactionStatus(ksmTx.id, 1);
           log(`Quote deposit from ${ksmTx.sender} amount ${ksmTx.amount.toString()}`, "REGISTERED");
         } catch (e) {
           log(`Quote deposit from ${ksmTx.sender} amount ${ksmTx.amount.toString()}`, "FAILED TO REGISTER");
