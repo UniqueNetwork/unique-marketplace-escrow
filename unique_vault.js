@@ -187,9 +187,14 @@ async function updateOffer(collectionId, tokenId, newStatus) {
 
   const id = await getOpenOfferId(collectionId, tokenId);
 
-  const updateOfferSql = `UPDATE public."${offerTable}" SET "OfferStatus" = ${newStatus} WHERE "Id" = '${id}'`;
-  // Only update active offer (should be one)
-  await conn.query(updateOfferSql);
+  if (id != "") {
+    const updateOfferSql = `UPDATE public."${offerTable}" SET "OfferStatus" = ${newStatus} WHERE "Id" = '${id}'`;
+    // Only update active offer (should be one)
+    await conn.query(updateOfferSql);
+  }
+  else {
+    log(`WARNING: Offer not found for token ${collectionId}-${tokenId}, nothing to update`);
+  }
 
   return id;
 }
