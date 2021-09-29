@@ -6,7 +6,10 @@ const config = require('./config');
 const { v4: uuidv4 } = require('uuid');
 const { connect, log } = require('./lib');
 const fs = require('fs');
-const decodeTokenMeta = require('./token-decoder');
+const {
+  decodeTokenMeta,
+  decodeSearchKeywords
+} = require('./token-decoder');
 
 var BigNumber = require('bignumber.js');
 BigNumber.config({ DECIMAL_PLACES: 12, ROUNDING_MODE: BigNumber.ROUND_DOWN, decimalSeparator: '.' });
@@ -46,6 +49,30 @@ function cancelDelay() {
   if (resolver) resolver();
 }
 
+function toHuman(obj) {
+  if(obj === undefined || obj === null) {
+    return undefined;
+  }
+
+  if('toHuman' in obj) {
+    return obj.toHuman();
+  }
+
+  if(Array.isArray(obj)) {
+    return obj.map(toHuman).join(', ');
+  }
+
+  if(typeof obj === 'object') {
+    for(let k of Object.keys(obj)) {
+      const h = toHuman(obj);
+      if(h) {
+        return h;
+      }
+    }
+  }
+
+  return undefined;
+}
 
 async function getDbConnection() {
   if (!dbClient) {
@@ -66,18 +93,21 @@ async function getLastHandledUniqueBlock(api) {
   const conn = await getDbConnection();
   const selectLastHandledUniqueBlockSql = `SELECT * FROM public."${uniqueBlocksTable}" ORDER BY public."${uniqueBlocksTable}"."BlockNumber" DESC LIMIT 1;`;
   const res = await conn.query(selectLastHandledUniqueBlockSql);
-  const lastBlock = (res.rows.length > 0) ? res.rows[0].BlockNumber : await getStartingBlock(api);
+  const lastBlock = (res.rows.length > 0) ? res.rows[0].BlockNumber : await getAndStoreStartingBlock(api);
   return lastBlock;
 }
 
-async function getStartingBlock(api) {
+async function getAndStoreStartingBlock(api) {
+  let startingBlock;
   if('current'.localeCompare(config.startFromBlock, undefined, {sensitivity: 'accent'}) === 0) {
     const head = await api.rpc.chain.getHeader();
-    const block = head.number.toNumber();
-    return block - 10; // start 10 blocks behind
+    startingBlock = head.number.toNumber();
+  } else {
+    startingBlock = parseInt(config.startFromBlock);
   }
 
-  return parseInt(config.startFromBlock);
+  await addHandledUniqueBlock(startingBlock);
+  return startingBlock;
 }
 
 async function addHandledUniqueBlock(blockNumber) {
@@ -156,7 +186,7 @@ async function getIncomingNFTTransaction() {
   return nftTx;
 }
 
-async function addOffer(seller, collectionId, tokenId, quoteId, price, metadata) {
+async function addOffer(seller, collectionId, tokenId, quoteId, price, metadata, searchKeywords) {
   const conn = await getDbConnection();
 
   // Convert address into public key
@@ -172,6 +202,28 @@ async function addOffer(seller, collectionId, tokenId, quoteId, price, metadata)
 	SET "OfferId"=$1
 	WHERE "CollectionId" = $2 AND "TokenId" = $3 AND "OfferId" IS NULL;`
   await conn.query(updateNftIncomesSql, [offerId, collectionId, tokenId]);
+
+  await saveSearchKeywords(conn, collectionId, tokenId, searchKeywords);
+}
+
+async function saveSearchKeywords(conn, collectionId, tokenId, searchKeywords) {
+  if(searchKeywords.length <= 0) {
+    return;
+  }
+
+  const keywordsStored = await conn.query(`SELECT Max("CollectionId") from public."TokenTextSearch"
+    WHERE "CollectionId" = $1 AND "TokenId" = $2`,
+    [collectionId, tokenId]
+  );
+  if(keywordsStored.rows.length < 0) {
+    return;
+  }
+
+  await Promise.all(searchKeywords.map(({locale, text}) =>
+    conn.query(`INSERT INTO public."TokenTextSearch"
+("Id", "CollectionId", "TokenId", "Text", "Locale") VALUES
+($1, $2, $3, $4, $5);`, [uuidv4(), collectionId, tokenId, text, locale]))
+  );
 }
 
 async function getOpenOfferId(collectionId, tokenId) {
@@ -187,14 +239,9 @@ async function updateOffer(collectionId, tokenId, newStatus) {
 
   const id = await getOpenOfferId(collectionId, tokenId);
 
-  if (id != "") {
-    const updateOfferSql = `UPDATE public."${offerTable}" SET "OfferStatus" = ${newStatus} WHERE "Id" = '${id}'`;
-    // Only update active offer (should be one)
-    await conn.query(updateOfferSql);
-  }
-  else {
-    log(`WARNING: Offer not found for token ${collectionId}-${tokenId}, nothing to update`);
-  }
+  const updateOfferSql = `UPDATE public."${offerTable}" SET "OfferStatus" = ${newStatus} WHERE "Id" = '${id}'`;
+  // Only update active offer (should be one)
+  await conn.query(updateOfferSql);
 
   return id;
 }
@@ -283,11 +330,10 @@ function getTransactionStatus(events, status) {
   if (status.isBroadcast) {
     return "NotReady";
   }
-  if (status.isRetracted) {
-    return "NotReady";
-  }
   if (status.isInBlock || status.isFinalized) {
-    if(events.filter(e => e.event.data.method === 'ExtrinsicFailed').length > 0) {
+    const errors = events.filter(e => e.event.data.method === 'ExtrinsicFailed');
+    if(errors.length > 0) {
+      log(`Transaction failed, ${toHuman(errors)}`, 'ERROR');
       return "Fail";
     }
     if(events.filter(e => e.event.data.method === 'ExtrinsicSuccess').length > 0) {
@@ -451,8 +497,9 @@ async function scanNftBlock(api, admin, blockNum) {
           const [collection, token] = await Promise.all([api.query.nft.collectionById(collectionId), api.query.nft.nftItemList(collectionId, tokenId)]);
 
           const tokenMeta = decodeTokenMeta(collection, token) || {};
+          const tokenSearchKeywords = decodeSearchKeywords(collection, token, tokenId) || [];
 
-          await addOffer(ex.signer.toString(), collectionId, tokenId, quoteId, price, tokenMeta);
+          await addOffer(ex.signer.toString(), collectionId, tokenId, quoteId, price, tokenMeta, tokenSearchKeywords);
         }
 
         // Buy call
@@ -701,18 +748,20 @@ async function migrateDb(){
   await conn.query(migrationSql);
 }
 
-async function jsonMetadataMigrated() {
-  let migrated = false;
+async function migrated(migrationId) {
   try {
     const conn = await getDbConnection();
-    const migrationSql = `SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20210722091927_JsonMetadata'`;
-    const res = await conn.query(migrationSql);
-    migrated = res.rows.length > 0;
+    const migrationSql = `SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = $1`;
+    const res = await conn.query(migrationSql, [migrationId]);
+    return res.rows.length > 0;
+  } catch (error) {
+    // 42P01 = table does not exist
+    if(error.code === '42P01') {
+      return false;
+    }
+
+    throw error;
   }
-  catch (e) {
-    console.log(e);
-  }
-  return migrated;
 }
 
 async function setMetadataForAllOffers() {
@@ -738,28 +787,61 @@ async function createTestOffers() {
   for(let i = 1; i < 200; i++) {
     const [collection, token] = await Promise.all([api.query.nft.collectionById(25), api.query.nft.nftItemList(25, i)]);
     const metadata = decodeTokenMeta(collection, token);
+    const textSearchKeywords = decodeSearchKeywords(collection, token, i.toString());
     if(metadata) {
-      await addOffer(adminAddress, 25, i, 2, '100000000000', metadata);
+      await addOffer(adminAddress, 25, i, 2, '100000000000', metadata, textSearchKeywords);
     }
   }
   for(let i = 1; i < 200; i++) {
     const [collection, token] = await Promise.all([api.query.nft.collectionById(23), api.query.nft.nftItemList(23, i)]);
     const metadata = decodeTokenMeta(collection, token);
+    const textSearchKeywords = decodeSearchKeywords(collection, token, i.toString());
     if(metadata) {
-      await addOffer(adminAddress, 23, i, 2, '100000000000', metadata);
+      await addOffer(adminAddress, 23, i, 2, '100000000000', metadata, textSearchKeywords);
     }
   }
+  for(let i = 1; i < 200; i++) {
+    const [collection, token] = await Promise.all([api.query.nft.collectionById(112), api.query.nft.nftItemList(112, i)]);
+    const metadata = decodeTokenMeta(collection, token);
+    const textSearchKeywords = decodeSearchKeywords(collection, token, i.toString());
+    if(metadata) {
+      await addOffer(adminAddress, 112, i, 2, '100000000000', metadata, textSearchKeywords);
+    }
+  }
+}
+
+async function setTextSearchForAllOffers() {
+  const conn = await getDbConnection();
+  const offers = await conn.query(`SELECT DISTINCT "CollectionId", "TokenId" FROM public."Offer";`)
+  const api = await connect(config);
+  for(let offer of offers.rows) {
+    const [collection, token] = await Promise.all([api.query.nft.collectionById(+offer.CollectionId), api.query.nft.nftItemList(+offer.CollectionId, +offer.TokenId)]);
+    const textSearchKeywords = decodeSearchKeywords(collection, token, offer.TokenId.toString());
+    await saveSearchKeywords(conn, +offer.CollectionId, +offer.TokenId, textSearchKeywords);
+  }
+}
+
+async function truncateTextSearch() {
+  const conn = await getDbConnection();
+  await conn.query(`TRUNCATE public."TokenTextSearch";`)
 }
 
 async function main() {
   log(`config.wsEndpoint: ${config.marketContractAddress}`);
   log(`config.marketContractAddress: ${config.marketContractAddress}`);
-  const isMetadataMigrated = await jsonMetadataMigrated();
+  const [isMetadataMigrated, isTextSearchMigrated, isAddTokenPrefixAndIdMigrated, isFixedTokensSearchIndexing] =
+    await Promise.all([migrated('20210722091927_JsonMetadata'), migrated('20210802081707_TokensTextSearch'), migrated('20210805043620_AddTokenPrefixAndIdToSearch'), migrated('20210806043509_FixedTokensSearchIndexing')]);
   await migrateDb();
 
   if(!isMetadataMigrated)
   {
     await setMetadataForAllOffers();
+  }
+
+  if(!isTextSearchMigrated || !isAddTokenPrefixAndIdMigrated || !isFixedTokensSearchIndexing)
+  {
+    await truncateTextSearch();
+    await setTextSearchForAllOffers();
   }
 
   await handleUnique();
