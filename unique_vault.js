@@ -55,7 +55,7 @@ function toHuman(obj) {
   }
 
   if('toHuman' in obj) {
-    return obj.toHuman();
+    return JSON.stringify(obj.toHuman());
   }
 
   if(Array.isArray(obj)) {
@@ -827,7 +827,7 @@ async function truncateTextSearch() {
 }
 
 async function main() {
-  log(`config.wsEndpoint: ${config.marketContractAddress}`);
+  log(`config.wsEndpoint: ${config.wsEndpoint}`);
   log(`config.marketContractAddress: ${config.marketContractAddress}`);
   const [isMetadataMigrated, isTextSearchMigrated, isAddTokenPrefixAndIdMigrated, isFixedTokensSearchIndexing] =
     await Promise.all([migrated('20210722091927_JsonMetadata'), migrated('20210802081707_TokensTextSearch'), migrated('20210805043620_AddTokenPrefixAndIdToSearch'), migrated('20210806043509_FixedTokensSearchIndexing')]);
