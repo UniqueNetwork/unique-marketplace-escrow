@@ -1,11 +1,10 @@
 const protobuf = require('protobufjs')
 const { hexToU8a } = require('@polkadot/util');
-const hexToString = require('./lib/hexToString');
-const isNullOrWhitespace = require('./lib/is-null-or-whitespace');
+const { util } = require('./lib');
 
 function decodeMetaType(collection) {
   const schema = collection.toJSON().ConstOnChainSchema;
-  const schemaStr = hexToString(schema);
+  const schemaStr = util.hexToString(schema);
   let protoJson = JSON.parse(schemaStr);
 
   let root = protobuf.Root.fromJSON(protoJson);
@@ -22,10 +21,10 @@ function decodeTokenMeta(collection, token) {
     let tokenDataBuffer = hexToU8a(constData);
 
     // Decode a Uint8Array (browser) or Buffer (node) to a message
-    var message = NFTMeta.decode(tokenDataBuffer);
+    let message = NFTMeta.decode(tokenDataBuffer);
 
     // Maybe convert the message back to a plain object
-    var object = NFTMeta.toObject(message, {
+    let object = NFTMeta.toObject(message, {
       longs: String,  // longs as strings (requires long.js)
       bytes: String,  // bytes as base64 encoded strings
       defaults: true, // includes default values
@@ -49,8 +48,8 @@ function decodeSearchKeywords(collection, token, tokenId) {
       keywords.push(k);
     }
     keywords.push({locale: null, text: tokenId});
-    keywords.push({locale: null, text: hexToString(collection.toJSON().TokenPrefix)});
-    return keywords.filter(({text}) => !isNullOrWhitespace(text));
+    keywords.push({locale: null, text: util.hexToString(collection.toJSON().TokenPrefix)});
+    return keywords.filter(({text}) => !util.isNullOrWhitespace(text));
   }
   catch (e) {
     return [];
@@ -65,10 +64,10 @@ function* getMetadataTokens(collection, token) {
     let tokenDataBuffer = hexToU8a(constData);
 
     // Decode a Uint8Array (browser) or Buffer (node) to a message
-    var message = NFTMeta.decode(tokenDataBuffer);
+    let message = NFTMeta.decode(tokenDataBuffer);
 
     // Maybe convert the message back to a plain object
-    var object = NFTMeta.toObject(message, {
+    let object = NFTMeta.toObject(message, {
       enums: String,
       longs: String,  // longs as strings (requires long.js)
       bytes: String,  // bytes as base64 encoded strings
@@ -87,7 +86,7 @@ function* getMetadataTokens(collection, token) {
 function* getKeywords(object, NFTMeta){
   for (let key in object) {
     yield {locale: null, text: key};
-    if (NFTMeta.fields[key].resolvedType.constructor.name == "Enum") {
+    if (NFTMeta.fields[key].resolvedType.constructor.name.toString() === "Enum") {
       if (Array.isArray(object[key])) {
         for (let i = 0; i < object[key].length; i++) {
           yield* convertEnumToString(object[key][i], key, NFTMeta);

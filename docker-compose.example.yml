@@ -1,0 +1,34 @@
+version: "3.5"
+
+services:
+  escrow-unique-postgres:
+    image: postgres:13.4-alpine
+    container_name: escrow-unique-postgres
+    environment:
+      POSTGRES_DB: 'escrow-unique'
+      POSTGRES_USER: 'escrow-unique'
+      POSTGRES_PASSWORD: 'test'
+      POSTGRES_PORT: '5432'
+      POSTGRES_INITDB_ARGS: "--auth-local=trust"
+    ports:
+      - 5432:5432
+    volumes:
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ../postgresql/escrow-unique:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+
+  escrow-unique-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: escrow-unique-node
+    container_name: escrow-unique-node
+    environment:
+      ADMIN_SEED: '//Alice'
+      UNIQUE_WS_ENDPOINT: 'wss://testnet2.uniquenetwork.io'
+      MATCHER_CONTRACT_ADDRESS: '5EuBcZYh47ruAjrDweHvH4Fm5BwYkiFHNpTGKWAHkA3WFsEG'
+      DB_HOST: 'escrow-unique-postgres'
+      DB_NAME: 'escrow-unique'
+      DB_USER: 'escrow-unique'
+      DB_PASSWORD: 'test'
+      START_FROM_BLOCK: 'current'
