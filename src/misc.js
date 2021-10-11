@@ -1,14 +1,15 @@
-const {connectApi} = require("./lib");
-const {Keyring} = require("@polkadot/api");
-const decodeTokenMeta = require("./token-decoder");
-const db = require('./db_storage')
+const { Keyring } = require("@polkadot/api");
+const { decodeTokenMeta } = require("./token-decoder");
+const { connectApi } = require('./lib');
+const db = require('./db_storage');
+const config = require('./config').getConfig();
 const {decodeSearchKeywords} = require("./token-decoder");
 
 async function createTestOffers() {
-  const api = await connect(config);
+  const api = await connectApi(config);
   const keyring = new Keyring({ type: 'sr25519' });
   const admin = keyring.addFromUri('//Bob');
-  adminAddress = admin.address.toString();
+  let adminAddress = admin.address.toString();
   for(let i = 1; i < 200; i++) {
     const [collection, token] = await Promise.all([api.query.nft.collectionById(25), api.query.nft.nftItemList(25, i)]);
     const metadata = decodeTokenMeta(collection, token);
@@ -34,3 +35,9 @@ async function createTestOffers() {
     }
   }
 }
+
+async function main() {
+  // await createTestOffers();
+}
+
+main().catch(console.error).finally(() => process.exit());
