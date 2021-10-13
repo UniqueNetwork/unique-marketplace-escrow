@@ -129,7 +129,7 @@ function getTransactionStatus(events, status) {
   if (status.isInBlock || status.isFinalized) {
     const errors = events.filter(e => e.event.data.method === 'ExtrinsicFailed');
     if(errors.length > 0) {
-      logging.log(`Transaction failed, ${toHuman(errors)}`, logging.status.ERROR);
+      logging.log(`Transaction failed, ${util.toHuman(errors)}`, logging.status.ERROR);
       return constants.transactionStatus.STATUS_FAIL;
     }
     if(events.filter(e => e.event.data.method === 'ExtrinsicSuccess').length > 0) {
