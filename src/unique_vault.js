@@ -12,26 +12,33 @@ const {
 } = require('./token-decoder');
 
 
-let adminAddress;
+let stateStore = {
+  adminAddress: null,
+  startBlockInitialized: false,
+  bestBlockNumber: 0  // The highest block in chain (not final)
+}
 
 const contractAbi = require("./market_metadata.json");
 const { doMigrate } = require("./migration");
 
 const defaultQuoteId = 2; // KSM
 
-let bestBlockNumber = 0; // The highest block in chain (not final)
-
 
 async function getLastHandledUniqueBlock(api) {
-  const dbResult = await db.getLastHandledUniqueBlock();
-  return (dbResult.rows.length > 0) ? dbResult.rows[0].BlockNumber : await getAndStoreStartingBlock(api);
+  if(stateStore.startBlockInitialized || config.startFromBlock.toLocaleLowerCase() !== 'latest') {
+    const dbResult = await db.getLastHandledUniqueBlock();
+    if(dbResult.rows.length > 0) return dbResult.rows[0].BlockNumber;
+  }
+
+  return await getAndStoreStartingBlock(api);
 }
 
 async function getAndStoreStartingBlock(api) {
   let startingBlock;
-  if('current'.localeCompare(config.startFromBlock, undefined, {sensitivity: 'accent'}) === 0) {
+  if(['current', 'latest'].indexOf(config.startFromBlock.toLocaleLowerCase()) > -1) {
     const head = await api.rpc.chain.getHeader();
     startingBlock = head.number.toNumber();
+    stateStore.startBlockInitialized = true;
   } else {
     startingBlock = parseInt(config.startFromBlock);
   }
@@ -129,7 +136,7 @@ function getTransactionStatus(events, status) {
   if (status.isInBlock || status.isFinalized) {
     const errors = events.filter(e => e.event.data.method === 'ExtrinsicFailed');
     if(errors.length > 0) {
-      logging.log(`Transaction failed, ${toHuman(errors)}`, logging.status.ERROR);
+      logging.log(`Transaction failed, ${util.toHuman(errors)}`, logging.status.ERROR);
       return constants.transactionStatus.STATUS_FAIL;
     }
     if(events.filter(e => e.event.data.method === 'ExtrinsicSuccess').length > 0) {
@@ -414,7 +421,7 @@ function findMatcherEvent(allRecords, abi, extrinsicIndex, eventName) {
 
 async function subscribeToBlocks(api) {
   await api.rpc.chain.subscribeNewHeads((header) => {
-    bestBlockNumber = header.number;
+    stateStore.bestBlockNumber = header.number;
     cancelDelay();
   });
 }
@@ -445,7 +452,7 @@ const catchUpWithBlocks = async (api, admin) => {
     let blockNum = parseInt(lastBlock) + 1;
 
     try {
-      if (blockNum <= bestBlockNumber) {
+      if (blockNum <= stateStore.bestBlockNumber) {
         await db.addHandledUniqueBlock(blockNum);
 
         // Handle NFT Deposits (by analysing block transactions)
@@ -515,8 +522,8 @@ async function handleUnique() {
   const api = await connectApi(config);
   const keyring = new Keyring({ type: 'sr25519' });
   const admin = keyring.addFromUri(config.adminSeed);
-  adminAddress = admin.address.toString();
-  logging.log(`Escrow admin address: ${adminAddress}`);
+  stateStore.adminAddress = admin.address.toString();
+  logging.log(`Escrow admin address: ${stateStore.adminAddress}`);
 
   // await scanNftBlock(api, admin, 415720);
   // return;

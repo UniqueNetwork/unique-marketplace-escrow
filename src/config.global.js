@@ -14,5 +14,5 @@ module.exports = {
 
   // From which block to start at the first run.
   // Either block number or 'current' to start from current block.
-  startFromBlock : process.env.START_FROM_BLOCK || 'current'
+  startFromBlock : `${process.env.START_FROM_BLOCK || 'current'}`
 };
