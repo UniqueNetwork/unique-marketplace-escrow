@@ -6,13 +6,7 @@ let dbClient = null;
 async function getDbConnection() {
   if (!dbClient) {
     let config = require('../config').getConfig();
-    dbClient = new Client({
-      user: config.dbUser,
-      host: config.dbHost,
-      database: config.dbName,
-      password: config.dbPassword,
-      port: config.dbPort
-    });
+    dbClient = new Client({connectionString: config.postgresUrl});
     dbClient.connect();
     logging.log("Connected to the DB");
   }

@@ -19,7 +19,6 @@ let stateStore = {
 }
 
 const contractAbi = require("./market_metadata.json");
-const { doMigrate } = require("./migration");
 
 const defaultQuoteId = 2; // KSM
 
@@ -553,8 +552,6 @@ async function handleUnique() {
 async function main() {
   logging.log(`config.wsEndpoint: ${config.wsEndpoint}`);
   logging.log(`config.marketContractAddress: ${config.marketContractAddress}`);
-
-  await doMigrate();
 
   await handleUnique();
 }
