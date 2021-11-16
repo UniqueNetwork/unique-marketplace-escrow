@@ -1,4 +1,4 @@
-const {postgres} = require("./lib");
+const {postgres, constants} = require("./lib");
 const {decodeAddress} = require("@polkadot/util-crypto");
 const {v4: uuidv4} = require("uuid");
 
@@ -66,14 +66,18 @@ const getIncomingNFTTransaction = async () => {
   return await conn.query(getIncomingNftsSql);
 }
 
-const addOffer = async (seller, collectionId, tokenId, quoteId, price, metadata, searchKeywords) => {
+const addOffer = async (seller, collectionId, tokenId, quoteId, price, metadata, searchKeywords, cancelDuplicates) => {
   const conn = await postgres.getDbConnection();
 
   // Convert address into public key
   const publicKey = Buffer.from(decodeAddress(seller), 'binary').toString('base64');
 
+  if(cancelDuplicates) {
+    await conn.query(`UPDATE "${pgTables.offer}" SET "OfferStatus" = ${constants.offerStatuses.CANCELED} WHERE "CollectionId" = $1 AND "TokenId" = $2 AND "OfferStatus" = ${constants.offerStatuses.ACTIVE};`, [collectionId, tokenId]);
+  }
+
   const inserOfferSql = `INSERT INTO public."${pgTables.offer}"("Id", "CreationDate", "CollectionId", "TokenId", "Price", "Seller", "Metadata", "OfferStatus", "SellerPublicKeyBytes", "QuoteId")
-    VALUES ($1, now(), $2, $3, $4, $5, $6, 1, $7, $8);`;
+    VALUES ($1, now(), $2, $3, $4, $5, $6, ${constants.offerStatuses.ACTIVE}, $7, $8);`;
   const offerId = uuidv4();
   //Id | CreationDate | CollectionId | TokenId | Price | Seller | Metadata | OfferStatus | SellerPublicKeyBytes | QuoteId
   await conn.query(inserOfferSql, [offerId, collectionId, tokenId, price.padStart(40, '0'), publicKey, metadata, decodeAddress(seller), quoteId]);

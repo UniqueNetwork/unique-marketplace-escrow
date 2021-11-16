@@ -290,7 +290,7 @@ async function scanNftBlock(api, admin, blockNum) {
           const tokenMeta = decodeTokenMeta(collection, token) || {};
           const tokenSearchKeywords = decodeSearchKeywords(collection, token, tokenId) || [];
 
-          await db.addOffer(ex.signer.toString(), collectionId, tokenId, quoteId, price, tokenMeta, tokenSearchKeywords);
+          await db.addOffer(ex.signer.toString(), collectionId, tokenId, quoteId, price, tokenMeta, tokenSearchKeywords, config.cancelDuplicates);
         }
 
         // Buy call

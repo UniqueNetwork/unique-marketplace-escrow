@@ -10,6 +10,7 @@ const healthState = {
 }
 
 const offerStatuses = {
+  ACTIVE: 1,
   CANCELED: 2,
   TRADED: 3
 }
