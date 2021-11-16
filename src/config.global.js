@@ -6,7 +6,7 @@ module.exports = {
 
   whiteList : false,
 
-  cancelDuplicates: process.env.CANCEL_DUPLICATES !== 'false',
+  cancelDuplicates: true,
 
   postgresUrl: process.env.POSTGRES_URL || 'postgres://marketplace:12345@marketplace-postgres:5432/marketplace_db',
 

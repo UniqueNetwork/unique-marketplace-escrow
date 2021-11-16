@@ -29,4 +29,3 @@ services:
       MATCHER_CONTRACT_ADDRESS: '5EuBcZYh47ruAjrDweHvH4Fm5BwYkiFHNpTGKWAHkA3WFsEG'
       POSTGRES_URL: 'postgres://escrow-unique:test@escrow-unique-postgres/escrow-unique'
       UNIQUE_START_FROM_BLOCK: 'current'
-      CANCEL_DUPLICATES: 'true'

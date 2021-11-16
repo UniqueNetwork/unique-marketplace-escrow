@@ -66,15 +66,16 @@ const getIncomingNFTTransaction = async () => {
   return await conn.query(getIncomingNftsSql);
 }
 
-const addOffer = async (seller, collectionId, tokenId, quoteId, price, metadata, searchKeywords, cancelDuplicates) => {
+const cancelOffers = async (collectionId, tokenId) => {
+  const conn = await postgres.getDbConnection();
+  await conn.query(`UPDATE "${pgTables.offer}" SET "OfferStatus" = ${constants.offerStatuses.CANCELED} WHERE "CollectionId" = $1 AND "TokenId" = $2 AND "OfferStatus" = ${constants.offerStatuses.ACTIVE};`, [collectionId, tokenId]);
+}
+
+const addOffer = async (seller, collectionId, tokenId, quoteId, price, metadata, searchKeywords) => {
   const conn = await postgres.getDbConnection();
 
   // Convert address into public key
   const publicKey = Buffer.from(decodeAddress(seller), 'binary').toString('base64');
-
-  if(cancelDuplicates) {
-    await conn.query(`UPDATE "${pgTables.offer}" SET "OfferStatus" = ${constants.offerStatuses.CANCELED} WHERE "CollectionId" = $1 AND "TokenId" = $2 AND "OfferStatus" = ${constants.offerStatuses.ACTIVE};`, [collectionId, tokenId]);
-  }
 
   const inserOfferSql = `INSERT INTO public."${pgTables.offer}"("Id", "CreationDate", "CollectionId", "TokenId", "Price", "Seller", "Metadata", "OfferStatus", "SellerPublicKeyBytes", "QuoteId")
     VALUES ($1, now(), $2, $3, $4, $5, $6, ${constants.offerStatuses.ACTIVE}, $7, $8);`;
@@ -125,7 +126,7 @@ const addTrade = async (offerId, buyer) => {
 
 const getOpenOfferId = async (collectionId, tokenId) => {
   const conn = await postgres.getDbConnection();
-  const selectOpenOffersSql = `SELECT * FROM public."${pgTables.offer}" WHERE "CollectionId" = ${collectionId} AND "TokenId" = ${tokenId} AND "OfferStatus" = 1;`;
+  const selectOpenOffersSql = `SELECT * FROM public."${pgTables.offer}" WHERE "CollectionId" = ${collectionId} AND "TokenId" = ${tokenId} AND "OfferStatus" = ${constants.offerStatuses.ACTIVE};`;
   const res = await conn.query(selectOpenOffersSql);
   return (res.rows.length > 0) ? res.rows[0].Id : '';
 }
@@ -176,5 +177,5 @@ module.exports = {
   getLastHandledUniqueBlock, addHandledUniqueBlock,
   addIncomingNFTTransaction, setIncomingNftTransactionStatus, getIncomingNFTTransaction, addOutgoingQuoteTransaction,
   setIncomingKusamaTransactionStatus, getIncomingKusamaTransaction,
-  addOffer, addTrade, getOpenOfferId, updateOffer, saveSearchKeywords
+  addOffer, addTrade, getOpenOfferId, updateOffer, saveSearchKeywords, cancelOffers
 }
