@@ -6,13 +6,11 @@ module.exports = {
 
   whiteList : false,
 
-  dbHost : process.env.DB_HOST || 'localhost',
-  dbPort : process.env.DB_PORT || 5432,
-  dbName : process.env.DB_NAME|| 'marketplace',
-  dbUser : process.env.DB_USER || 'marketplace',
-  dbPassword : process.env.DB_PASSWORD || '12345',
+  cancelDuplicates: true,
+
+  postgresUrl: process.env.POSTGRES_URL || 'postgres://marketplace:12345@marketplace-postgres:5432/marketplace_db',
 
   // From which block to start at the first run.
   // Either block number or 'current' to start from current block.
-  startFromBlock : `${process.env.START_FROM_BLOCK || 'current'}`
+  startFromBlock : `${process.env.UNIQUE_START_FROM_BLOCK || 'current'}`
 };

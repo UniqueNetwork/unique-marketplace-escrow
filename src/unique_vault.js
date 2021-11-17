@@ -19,7 +19,6 @@ let stateStore = {
 }
 
 const contractAbi = require("./market_metadata.json");
-const { doMigrate } = require("./migration");
 
 const defaultQuoteId = 2; // KSM
 
@@ -290,7 +289,12 @@ async function scanNftBlock(api, admin, blockNum) {
 
           const tokenMeta = decodeTokenMeta(collection, token) || {};
           const tokenSearchKeywords = decodeSearchKeywords(collection, token, tokenId) || [];
-
+          let duplicate = await db.getOpenOfferId(collectionId, tokenId)
+          if(duplicate && config.cancelDuplicates) {
+            logging.log(`Found old offer for collection ${collectionId} and token ${tokenId}`, logging.status.WARNING);
+            logging.log(`Status for offer ${duplicate} (and other, if exists) changed to 2 (cancelled)`, logging.status.WARNING);
+            await db.cancelOffers(collectionId, tokenId);
+          }
           await db.addOffer(ex.signer.toString(), collectionId, tokenId, quoteId, price, tokenMeta, tokenSearchKeywords);
         }
 
@@ -553,8 +557,6 @@ async function handleUnique() {
 async function main() {
   logging.log(`config.wsEndpoint: ${config.wsEndpoint}`);
   logging.log(`config.marketContractAddress: ${config.marketContractAddress}`);
-
-  await doMigrate();
 
   await handleUnique();
 }

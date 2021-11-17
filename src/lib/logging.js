@@ -2,6 +2,7 @@ const util = require('./utility');
 
 const logStatus = {
   ERROR: 'ERROR',
+  WARNING: 'WARNING',
   RECEIVED: 'RECEIVED',
   FAILED: 'FAILED',
   INFO: 'INFO',
