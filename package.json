@@ -5,7 +5,7 @@
   "author": "Unique Network",
   "license": "Apache 2.0",
   "dependencies": {
-    "@polkadot/api": "6.3.1",
+    "@polkadot/api": "6.11.1",
     "@polkadot/api-contract": "6.3.1",
     "bignumber.js": "^9.0.0",
     "fs": "0.0.1-security",
